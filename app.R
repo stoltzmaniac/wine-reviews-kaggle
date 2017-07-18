@@ -4,9 +4,10 @@ library(maptools)
 library(ggplot2)
 library(ggjoy)
 library(caTools)
-library(randomForest)  
-library(caret)
+library(party)
 library(e1071)
+library(rpart)
+library(MASS)
 library(tidyverse)
 
 data = read.csv('winemag-data_first150k.csv')
@@ -26,51 +27,40 @@ summary(fit2)
 
 ###########
 
-varieties = data %>%
-  group_by(variety) %>%
-  summarise(n = n()) %>%
-  arrange(desc(n))
-topVarieties = varieties$variety[1:50]
+topN = function(df,VAR,nCutoff){
+  tmp = df %>%
+    group_by_(VAR) %>%
+    summarise(n = n()) %>%
+    arrange(desc(n))
+  colnames(tmp) = c('N','n')
+  tmpN = tmp$N[1:nCutoff]
+  tmpN = factor(tmpN,levels=tmpN)
+  return(tmpN)
+}
+
+mround <- function(x,base){ 
+  base*round(x/base) 
+} 
+
+varieties = topN(data,'variety',50)
+countries = topN(data,'country',50)
 
 df = data %>% 
   na.omit() %>%
-  filter(country != '') %>%
-  filter(variety %in% topVarieties) %>%
-  mutate(Quality = if_else(points>=90,1,0)) %>%
-  select(Quality,country,designation,price,province,region_1,variety,winery,points)
-  #select(Quality,country,designation,price,province,region_1,variety,winery)
-#df$Quality = factor(df$Quality,levels=c('Good','Bad'))
-df$variety = factor(df$variety,levels=topVarieties)
+  dplyr::mutate(priceBucket = mround(price,5),Quality=ifelse(points>=90,'Great','Okay')) %>%
+  dplyr::select(country,designation,province,region_1,variety,winery,priceBucket,Quality)
+df$priceBucket = factor(df$priceBucket,levels=unique(df$priceBucket))
+df$Quality = factor(df$Quality,levels=c('Great','Okay'))
 
 set.seed(101) 
-sample = sample.split(df$country, SplitRatio = .30)
+sample = sample.split(df$country, SplitRatio = .05)
 df.train = subset(df, sample == TRUE)
 df.test  = subset(df, sample == FALSE)
 
-table(df$Quality)/nrow(df)  
-table(df.train$Quality)/nrow(df.train)
-table(df.test$Quality)/nrow(df.test)
-
-#Fit Random Forest Model
-rf = randomForest(points ~ variety + country,  
-                  ntree = 100,
-                  data = df.train)
-plot(rf)  
-print(rf)
-
-varImpPlot(rf,  
-           sort = T,
-           n.var=10,
-           main="Top 10 - Variable Importance")
-
-
-var.imp = data.frame(importance(rf, type=2))
-var.imp$Variables = row.names(var.imp) 
-
-df.train$predicted.response = predict(rf , df.train)
-df.train = df.train %>% mutate(error = predicted.response-price, error.pct = (predicted.response-price)/price)
-
-
+model.tree = rpart(Quality ~ ., method = 'class', data = df.train)
+printcp(model.tree)
+plot(model.tree)
+text(model.tree)
 ##############
 
 server <- function(input, output) {
