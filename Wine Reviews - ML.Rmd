@@ -1,0 +1,69 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(rpart.plot)
+library(caret)
+library(klaR)
+library(RColorBrewer)
+```
+
+
+```{r}
+wine_df = read.csv('winemag-data_first150k.csv')
+wine_df = wine_df %>% 
+  select(country,points,price,region_1,variety,winery) %>%
+  na.omit()
+```
+
+```{r}
+qualityCutoff = 90
+wine_df = wine_df %>%
+  mutate(Quality = ifelse(points>=as.name(qualityCutoff),
+                          paste0(as.name(qualityCutoff),'+'),
+                          paste0('<',as.name(qualityCutoff)))) %>%
+  select(-points)
+wine_df$Quality = factor(wine_df$Quality)
+```
+
+
+```{r}
+head(wine_df)
+```
+
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+set.seed(101)
+
+trainIndex = createDataPartition(wine_df$Quality, p=0.10, list=FALSE)
+wine_train = wine_df[ trainIndex,]
+wine_test = wine_df[-trainIndex,]
+fit <- NaiveBayes(Quality~., data=wine_train)
+```
+
+```{r}
+summary(fit)
+```
+
+```{r}
+x_test = wine_test[,1:5]
+y_test = wine_test[,6]
+predictions = predict(fit, x_test)
+```
+
+```{r}
+confusionMatrix(predictions$class, y_test)
+```
+
+```{r}
+
+```
+
