@@ -4,63 +4,112 @@ output: html_notebook
 ---
 
 ```{r}
-library(tidyverse)
 library(ggplot2)
-library(rpart.plot)
+library(scales)
 library(caret)
 library(klaR)
+library(rpart)
+library(party)
+library(randomForest)
 library(RColorBrewer)
+library(tidyverse)
+```
+
+```{r}
+# Custom Functions
+
+# Round to the nearest "m" (for example 5)
+mround = function(x,base){ 
+        rounded = base * round(x / base) 
+        return(rounded)
+}
+
 ```
 
 
 ```{r}
-wine_df = read.csv('winemag-data_first150k.csv')
-wine_df = wine_df %>% 
-  select(country,points,price,region_1,variety,winery) %>%
+raw_df = read.csv('winemag-data_first150k.csv')
+head(raw_df)
+```
+
+
+```{r}
+us_wine_df = raw_df %>% 
+  filter(country == 'US') %>%
+  select(designation,points,price,province,region_1,variety,winery) %>%
   na.omit()
-```
 
-```{r}
 qualityCutoff = 90
-wine_df = wine_df %>%
+us_wine_df = us_wine_df %>%
   mutate(Quality = ifelse(points>=as.name(qualityCutoff),
                           paste0(as.name(qualityCutoff),'+'),
                           paste0('<',as.name(qualityCutoff)))) %>%
-  select(-points)
-wine_df$Quality = factor(wine_df$Quality)
+  select(-points,-price)
+us_wine_df$Quality = as.factor(us_wine_df$Quality)
+```
+
+
+
+
+
+
+```{r}
+head(us_wine_df)
 ```
 
 
 ```{r}
-head(wine_df)
+ggplot(us_wine_df,aes(x=Quality)) + geom_bar(aes(y = (..count..)/sum(..count..)))
 ```
 
-
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
-
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
 
 ```{r}
 set.seed(101)
-
-trainIndex = createDataPartition(wine_df$Quality, p=0.10, list=FALSE)
-wine_train = wine_df[ trainIndex,]
-wine_test = wine_df[-trainIndex,]
-fit <- NaiveBayes(Quality~., data=wine_train)
+trainIndex = createDataPartition(us_wine_df$Quality, p=0.70, list=FALSE)
+us_wine_train = us_wine_df[ trainIndex,]
+us_wine_test = us_wine_df[-trainIndex,]
 ```
 
 ```{r}
+#Decision Tree
+fit = rpart(Quality ~. , data = us_wine_train)
+printcp(fit)
+```
+
+```{r}
+plot(fit, uniform=TRUE, 
+  	main="Regression Tree for Wine Reviews")
+text(fit, use.n=TRUE, all=TRUE, cex=.8,pretty=1)
+```
+
+
+```{r}
+par(mfrow=c(1,2))
+rsq.rpart(fit)
+```
+
+
+
+```{r}
+# Naive Bayes
+fit <- NaiveBayes(Quality~., data=us_wine_train)
 summary(fit)
 ```
 
 ```{r}
-x_test = wine_test[,1:5]
-y_test = wine_test[,6]
+# NB Predictions
+x_test = us_wine_test[,1:5]
+y_test = us_wine_test[,6]
 predictions = predict(fit, x_test)
 ```
 
 ```{r}
+# NB Confusion Matrix
 confusionMatrix(predictions$class, y_test)
+```
+
+```{r}
+
 ```
 
 ```{r}
